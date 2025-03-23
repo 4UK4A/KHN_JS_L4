@@ -24,11 +24,31 @@ class Game {
             height: Math.min(50, this.canvas.height * 0.08)
         };
         
+        // Load images
+        this.images = {
+            basket: new Image(),
+            gold: new Image(),
+            silver: new Image(),
+            brown: new Image()
+        };
+
+        // Set image sources
+        this.images.basket.src = 'images/basket_clip_5805028.png';
+        this.images.gold.src = 'images/persik1.png';
+        this.images.silver.src = 'images/apple1.png';
+        this.images.brown.src = 'images/banana.png';
+
+        // Wait for all images to load before starting
+        Promise.all(Object.values(this.images).map(img => {
+            return new Promise((resolve) => {
+                img.onload = resolve;
+            });
+        })).then(() => {
+            this.init();
+        });
+        
         // Setup resize handler
         window.addEventListener('resize', () => this.handleResize());
-        
-        // Initialize game
-        this.init();
     }
 
     handleResize() {
@@ -138,13 +158,13 @@ class Game {
 
     spawnItem() {
         const types = [
-            { color: 'gold', points: 3, speed: 1.5 },
-            { color: 'silver', points: 2, speed: 1.2 },
-            { color: 'brown', points: 1, speed: 1.0 }
+            { image: 'gold', points: 3, speed: 1.5 },
+            { image: 'silver', points: 2, speed: 1.2 },
+            { image: 'brown', points: 1, speed: 1.0 }
         ];
 
         const type = types[Math.floor(Math.random() * types.length)];
-        const itemSize = Math.min(30, this.canvas.width * 0.04);
+        const itemSize = Math.min(60, this.canvas.width * 0.04);
         
         this.items.push({
             x: Math.random() * (this.canvas.width - itemSize),
@@ -187,13 +207,23 @@ class Game {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
         // Draw basket
-        this.ctx.fillStyle = '#8B4513';
-        this.ctx.fillRect(this.basket.x, this.basket.y, this.basket.width, this.basket.height);
+        this.ctx.drawImage(
+            this.images.basket,
+            this.basket.x,
+            this.basket.y,
+            this.basket.width,
+            this.basket.height
+        );
 
         // Draw items
         this.items.forEach(item => {
-            this.ctx.fillStyle = item.color;
-            this.ctx.fillRect(item.x, item.y, item.width, item.height);
+            this.ctx.drawImage(
+                this.images[item.image],
+                item.x,
+                item.y,
+                item.width,
+                item.height
+            );
         });
     }
 
