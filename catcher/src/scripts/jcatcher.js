@@ -1,36 +1,91 @@
 class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
-        this.ctx = this.canvas.getContext('2d');
-        this.canvas.width = 800;
-        this.canvas.height = 600;
+        if (!this.canvas) {
+            console.error('Canvas element not found!');
+            return;
+        }
         
+        this.ctx = this.canvas.getContext('2d');
         this.score = 0;
         this.baseSpeed = 1;
         this.gameTime = 0;
         this.isPaused = false;
+        this.items = [];
         
+        // Initial canvas setup - must happen before basket creation
+        this.resizeCanvas();
+        
+        // Setup basket after canvas is sized
         this.basket = {
             x: this.canvas.width / 2,
-            y: this.canvas.height - 50,
-            width: 100,
-            height: 50
+            y: this.canvas.height - 90,
+            width: Math.min(100, this.canvas.width * 0.15),
+            height: Math.min(50, this.canvas.height * 0.08)
         };
         
-        this.items = [];
+        // Setup resize handler
+        window.addEventListener('resize', () => this.handleResize());
+        
+        // Initialize game
         this.init();
     }
 
+    handleResize() {
+        const oldWidth = this.canvas.width;
+        const oldHeight = this.canvas.height;
+        
+        this.resizeCanvas();
+        
+        // Recalculate positions
+        const widthRatio = this.canvas.width / oldWidth;
+        const heightRatio = this.canvas.height / oldHeight;
+        
+        // Update basket position
+        this.basket.x *= widthRatio;
+        this.basket.y = this.canvas.height - 90;
+        
+        // Update items positions
+        this.items.forEach(item => {
+            item.x *= widthRatio;
+            item.y *= heightRatio;
+        });
+        
+        // Redraw everything
+        this.draw();
+    }
+
+    resizeCanvas() {
+        const container = document.getElementById('game-container');
+        if (!container) {
+            console.error('Game container not found! Using default dimensions.');
+            this.canvas.width = 800;
+            this.canvas.height = 600;
+        } else {
+            this.canvas.width = container.clientWidth;
+            this.canvas.height = container.clientHeight;
+        }
+        
+        // Adjust basket size based on canvas size
+        if (this.basket) {
+            this.basket.width = Math.min(100, this.canvas.width * 0.15);
+            this.basket.height = Math.min(50, this.canvas.height * 0.08);
+        }
+    }
+
     init() {
+        console.log('Game initialization started');
         this.setupEventListeners();
         this.startGameLoop();
         this.startTimer();
+        console.log('Game initialization completed');
     }
 
     setupEventListeners() {
         document.addEventListener('mousemove', (e) => {
             const rect = this.canvas.getBoundingClientRect();
-            this.basket.x = e.clientX - rect.left - this.basket.width / 2;
+            const scaleX = this.canvas.width / rect.width;
+            this.basket.x = (e.clientX - rect.left) * scaleX - this.basket.width / 2;
             
             // Keep basket within canvas bounds
             if (this.basket.x < 0) this.basket.x = 0;
@@ -56,6 +111,7 @@ class Game {
     }
 
     startGameLoop() {
+        console.log('Game loop started');
         setInterval(() => {
             if (!this.isPaused) {
                 this.update();
@@ -65,6 +121,7 @@ class Game {
 
         setInterval(() => {
             if (!this.isPaused) {
+                console.log('Spawning new item');
                 this.spawnItem();
             }
         }, 1000);  // Spawn item every second
@@ -87,12 +144,13 @@ class Game {
         ];
 
         const type = types[Math.floor(Math.random() * types.length)];
+        const itemSize = Math.min(30, this.canvas.width * 0.04);
         
         this.items.push({
-            x: Math.random() * (this.canvas.width - 30),
+            x: Math.random() * (this.canvas.width - itemSize),
             y: 0,
-            width: 30,
-            height: 30,
+            width: itemSize,
+            height: itemSize,
             ...type
         });
     }
@@ -151,7 +209,7 @@ class Game {
     }
 }
 
-// Start the game when the window loads
-window.onload = () => {
+// Wait for DOM to load before starting the game
+document.addEventListener('DOMContentLoaded', () => {
     new Game();
-};
+});
