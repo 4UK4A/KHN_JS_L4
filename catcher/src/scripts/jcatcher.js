@@ -107,14 +107,15 @@ class Game {
         this.recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
             if (event.error !== 'no-speech') {
-                this.recognition.stop();
+                
+                setTimeout(() => this.recognition.stop(), 50000);
                 setTimeout(() => this.recognition.start(), 500);
             }
         };
         
         this.recognition.onend = () => {
             console.log('Speech recognition ended');
-            setTimeout(() => this.recognition.start(), 100);
+            setTimeout(() => this.recognition.start(), 500);
         };
 
         // Start recognition immediately
