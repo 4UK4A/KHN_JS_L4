@@ -9,6 +9,7 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.score = 0;
         this.baseSpeed = 1;
+        this.updateSpeed(); // Add initial speed display
         this.gameTime = 0;
         this.isPaused = false;
         this.items = [];
@@ -49,6 +50,79 @@ class Game {
         
         // Setup resize handler
         window.addEventListener('resize', () => this.handleResize());
+
+        // Initialize speech synthesis
+        this.synthesis = window.speechSynthesis;
+        this.voice = null;
+        
+        // Set up Ukrainian voice if available
+        const loadVoices = () => {
+            const voices = this.synthesis.getVoices();
+            this.voice = voices.find(v => v.lang.includes('uk')) || voices[0];
+        };
+        
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+        loadVoices();
+
+        // Initialize speech recognition at the end of constructor
+        if ('webkitSpeechRecognition' in window) {
+            this.setupSpeechRecognition();
+        }
+    }
+
+    setupSpeechRecognition() {
+        this.recognition = new webkitSpeechRecognition();
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+        this.recognition.lang = 'uk-UA';
+        
+        this.recognition.onstart = () => {
+            console.log('Speech recognition started');
+        };
+        
+        this.recognition.onresult = (event) => {
+            const last = event.results.length - 1;
+            const result = event.results[last];
+        
+            if (!result.isFinal) return;
+        
+            const command = result[0].transcript.trim().toLowerCase();
+            console.log('Recognized command:', command);
+        
+            const words = command.split(' ');
+            words.forEach(word => {
+                if (word === 'вправо' || word === 'вліво') {
+                    const direction = word === 'вправо' ? 'right' : 'left';
+                    if (!this.isPaused) {
+                        this.moveBasket(direction);
+                    }
+                } else if (word === 'пауза' || word === 'старт') {
+                    this.togglePause();
+                }
+            });
+        };
+                
+        this.recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            if (event.error !== 'no-speech') {
+                this.recognition.stop();
+                setTimeout(() => this.recognition.start(), 500);
+            }
+        };
+        
+        this.recognition.onend = () => {
+            console.log('Speech recognition ended');
+            setTimeout(() => this.recognition.start(), 100);
+        };
+
+        // Start recognition immediately
+        try {
+            this.recognition.start();
+        } catch (e) {
+            console.error('Error starting speech recognition:', e);
+        }
     }
 
     handleResize() {
@@ -102,6 +176,7 @@ class Game {
     }
 
     setupEventListeners() {
+        // Keep mouse control as fallback
         document.addEventListener('mousemove', (e) => {
             const rect = this.canvas.getBoundingClientRect();
             const scaleX = this.canvas.width / rect.width;
@@ -115,7 +190,7 @@ class Game {
         });
 
         document.getElementById('pauseBtn').addEventListener('click', () => {
-            this.isPaused = !this.isPaused;
+            this.togglePause();
         });
 
         document.getElementById('resetBtn').addEventListener('click', () => {
@@ -123,11 +198,29 @@ class Game {
         });
     }
 
+    moveBasket(direction) {
+        const moveAmount = this.basket.width;
+        
+        if (direction === 'right') {
+            this.basket.x = Math.min(
+                this.canvas.width - this.basket.width,
+                this.basket.x + moveAmount
+            );
+        } else if (direction === 'left') {
+            this.basket.x = Math.max(
+                0,
+                this.basket.x - moveAmount
+            );
+        }
+    }
+
     resetGame() {
         this.score = 0;
         this.gameTime = 0;
+        this.baseSpeed = 1;
         this.items = [];
         this.updateScore();
+        this.updateSpeed();
     }
 
     startGameLoop() {
@@ -152,19 +245,32 @@ class Game {
             if (!this.isPaused) {
                 this.gameTime++;
                 this.updateTimer();
+                
+                // Increase speed every 30 seconds
+                if (this.gameTime % 30 === 0) {
+                    this.baseSpeed += 0.25;
+                    this.updateSpeed();
+                }
             }
         }, 1000);
+    }
+    
+    updateSpeed() {
+        document.querySelector('#speed span').textContent = this.baseSpeed.toFixed(2);
     }
 
     spawnItem() {
         const types = [
-            { image: 'gold', points: 3, speed: 1.5 },
-            { image: 'silver', points: 2, speed: 1.2 },
-            { image: 'brown', points: 1, speed: 1.0 }
+            { image: 'gold', points: 3, speed: 1.5, name: 'персик' },
+            { image: 'silver', points: 2, speed: 1.2, name: 'яблуко' },
+            { image: 'brown', points: 1, speed: 1.0, name: 'банан' }
         ];
 
         const type = types[Math.floor(Math.random() * types.length)];
         const itemSize = Math.min(60, this.canvas.width * 0.04);
+        
+        // Announce the fruit name
+        this.speakText(type.name);
         
         this.items.push({
             x: Math.random() * (this.canvas.width - itemSize),
@@ -173,6 +279,22 @@ class Game {
             height: itemSize,
             ...type
         });
+    }
+
+    speakText(text) {
+        // Cancel any ongoing speech
+        this.synthesis.cancel();
+        
+        if (this.voice) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.voice = this.voice;
+            utterance.lang = 'uk-UA';
+            utterance.volume = 1;
+            utterance.rate = 1;
+            utterance.pitch = 1;
+            
+            this.synthesis.speak(utterance);
+        }
     }
 
     update() {
@@ -236,6 +358,14 @@ class Game {
         const seconds = this.gameTime % 60;
         const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         document.querySelector('#timer span').textContent = timeString;
+    }
+
+    togglePause() {
+        this.isPaused = !this.isPaused;
+        
+        // Update pause button state if needed
+        const pauseBtn = document.getElementById('pauseBtn');
+        pauseBtn.textContent = this.isPaused ? 'Продовжити' : 'Пауза';
     }
 }
 
